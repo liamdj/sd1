@@ -194,8 +194,8 @@ public class Admissions extends Tournament<Student, AdmissionsConfig> {
 
     public static void main(String[] args) throws java.io.FileNotFoundException {
         assert args.length >= 1 : "Expected filename of strategies as first argument";
-        final int numTrials = 50;
-        final AdmissionsConfig config = new AdmissionsConfig(1, 100, 100);
+        final int numTrials = 30;
+        final AdmissionsConfig config = new AdmissionsConfig(16, 16, 1);
         final BufferedReader namesFile = new BufferedReader(new FileReader(args[0]));
         final List<String> strategyNames = namesFile.lines().map(s -> String.format("Student_%s", s))
                 .collect(Collectors.toList());
@@ -207,9 +207,28 @@ public class Admissions extends Tournament<Student, AdmissionsConfig> {
         final Admissions withStrategies = new Admissions(strategyNames);
 
         double[] res = withStrategies.oneEachTrials(numTrials, config);
-        System.out.println("netID,score");
-        for (int i = 0; i != N; ++i) {
-            System.out.println(strategyNames.get(i).substring(8) + "," + Double.toString(res[i]));
+        double avgScore = 0;
+        for (int i = 0; i < N; i++) {
+            avgScore += res[i];
         }
+        avgScore /= N;
+        System.out.println("netID,score,fraction of mean");
+        String prevName = strategyNames.get(0).substring(8);
+        double cumScore = res[0];
+        int stratCount = 1;
+        for (int i = 0; i != N; ++i) {
+            String name = strategyNames.get(i).substring(8);
+            if (!prevName.equals(name)) {
+                System.out.println(prevName + "," + Double.toString(cumScore / stratCount) + ","
+                        + Double.toString(cumScore / (avgScore * stratCount)));
+                prevName = name;
+                cumScore = 0;
+                stratCount = 0;
+            }
+            cumScore += res[i];
+            stratCount++;
+        }
+        System.out.println(prevName + "," + Double.toString(cumScore / stratCount) + ","
+                + Double.toString(cumScore / (avgScore * stratCount)));
     }
 }
