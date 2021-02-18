@@ -11,12 +11,18 @@ import java.util.stream.Collectors;
 
 public class Student_liamdj implements Student {
 
-    private static final int TRIALS = 140;
-    private static final double SIM_DECAY = 0.33;
+    private static final int TRIMMING_ROUNDS = 3;
+    private static final int TRIALS_PER = 8;
+    // Fraction of remaining schools removed for each trimming round
+    private static final double TRIM_SIZE = 0.3;
+    // Number of trials per fine-tuning round
+    private static final int ROUND_TRIALS = 200;
+    private static final double ROUND_DECAY = 1;
+    private static final int OPPONENT_APPLICATIONS = 12;
 
     // from Student_holist
-    private class School implements Comparable<School> {
-        public School(int i, double q) {
+    private class Agent implements Comparable<Agent> {
+        public Agent(int i, double q) {
             index = i;
             quality = q;
         }
@@ -24,7 +30,11 @@ public class Student_liamdj implements Student {
         private int index;
         private double quality;
 
-        public int compareTo(School n) { // smaller pairs are higher quality
+        public int getIndex() {
+            return index;
+        }
+
+        public int compareTo(Agent n) { // smaller pairs are higher quality
             int ret = Double.compare(n.quality, quality);
             return (ret == 0) ? (Integer.compare(index, n.index)) : ret;
         }
@@ -41,43 +51,23 @@ public class Student_liamdj implements Student {
         }
     }
 
-    // from Admissions
-    private static class StudentPair implements Comparable<StudentPair> {
-        public StudentPair(int i, double q) {
-            index = i;
-            quality = q;
-        }
-
-        public int getIndex() {
-            return index;
-        }
-
-        private int index;
-        private double quality;
-
-        public int compareTo(StudentPair n) { // sort by quality, then index
-            int ret = Double.compare(quality, n.quality);
-            return (ret == 0) ? (Integer.compare(index, n.index)) : ret;
-        }
-    }
-
     // Models how opponents are expected to apply
     // Mix between holist and synergist depending on how qualified a student is
     private int[] getSomeApplications(int num, double S, double T, double W, double aptitude, double[] schools,
             double[] synergies) {
 
         // Finds schools to apply to
-        School[] preferences = new School[schools.length];
+        Agent[] preferences = new Agent[schools.length];
         for (int i = 0; i < preferences.length; i++) {
-            preferences[i] = new School(i, (aptitude + synergies[i]) / (S + W) * schools[i] + synergies[i]);
+            preferences[i] = new Agent(i, (aptitude + synergies[i]) / (S + W) * schools[i] + synergies[i]);
         }
         Arrays.sort(preferences);
 
         // Sort schools applying to by actual preference
-        School[] willApply = new School[num];
+        Agent[] willApply = new Agent[num];
         for (int i = 0; i < num; i++) {
             int uni = preferences[i].index;
-            willApply[i] = new School(uni, schools[uni] + synergies[uni]);
+            willApply[i] = new Agent(uni, schools[uni] + synergies[uni]);
         }
         Arrays.sort(willApply);
 
@@ -102,45 +92,71 @@ public class Student_liamdj implements Student {
         // Create array of schools in preference order
         int[] apps = getSomeApplications(N, S, T, W, aptitude, schoolsArr, mySynergies);
 
-        // Maintain array of which applications gain most EV
+        // First, trim schools rapidly
+        for (int r = 0; r < TRIMMING_ROUNDS; r++) {
+            // Maintain array of applications which gain most EV
+            int[] evDiffs = new int[N];
+            for (int t = 0; t < TRIALS_PER * apps.length; t++) {
+                SkipAppResult res = skipApplication(apps, aptitude, schoolsArr, mySynergies, S, T, W);
+                if (res != null)
+                    evDiffs[res.uni] -= res.diff;
+            }
+
+            // Order schools by gain EV
+            Agent[] evDiffsAgents = new Agent[apps.length];
+            for (int i = 0; i < apps.length; i++) {
+                evDiffsAgents[i] = new Agent(i, evDiffs[apps[i]]);
+                // System.err.print(evDiffs[apps[i]] + ", ");
+            }
+            // System.err.println();
+            Arrays.sort(evDiffsAgents);
+
+            // trim worst x fraction of applications by EV gain
+            int numToKeep = (int) Math.ceil(apps.length * (1 - TRIM_SIZE));
+            Agent worstKept = evDiffsAgents[numToKeep - 1];
+            int[] newApps = new int[numToKeep];
+            for (int i = 0, k = 0; i < apps.length && k < numToKeep; i++) {
+                if (evDiffs[apps[i]] > worstKept.quality
+                        || evDiffs[apps[i]] == worstKept.quality && i <= worstKept.index) {
+                    newApps[k++] = apps[i];
+                }
+            }
+            apps = newApps;
+        }
+
+        // Second, remove 1 school per round
         int[] evDiffs = new int[N];
         while (apps.length > 10) {
-            // Reduce calculations for previous trials with different sets of application
-            // for (int i = 0; i < N; i++) {
-            // evDiffs[i] *= 1 - SIM_DECAY;
-            // }
-            evDiffs = new int[N];
-            // Repeated simulate situation and keep track of EV difference for each
-            // application
-            System.err.println("--------------" + apps.length);
-            for (int t = 0; t < TRIALS; t++) {
+            // Reduce weight of previous trials
+            for (int i = 0; i < N; i++) {
+                evDiffs[i] = (int) Math.round(evDiffs[i] * (1 - ROUND_DECAY));
+            }
+            // Maintain array of applications which gain most EV
+            for (int t = 0; t < ROUND_TRIALS; t++) {
                 SkipAppResult res = skipApplication(apps, aptitude, schoolsArr, mySynergies, S, T, W);
-                if (res != null && evDiffs[res.uni] == 0) {
-                    System.err.println(res.uni);
-                }
                 if (res != null)
-                    evDiffs[res.uni] += res.diff;
+                    evDiffs[res.uni] -= res.diff;
             }
             // Determine school of remaining with least benefit to apply
             int worstApp = apps[0];
             for (int i = 1; i < apps.length; i++) {
-                if (evDiffs[apps[i]] > evDiffs[worstApp])
+                if (evDiffs[apps[i]] <= evDiffs[worstApp])
                     worstApp = apps[i];
+                // System.err.print(evDiffs[apps[i]] + ", ");
             }
-            System.err.println("[" + worstApp + "]");
+            // System.err.println();
 
             // Creates new preference list with one less school
-            int len = apps.length - 1;
-            int[] newApps = new int[len];
+            int[] newApps = new int[apps.length - 1];
             int offset = 0;
             for (int i = 0; i < newApps.length; i++) {
                 if (worstApp == apps[i])
                     offset = 1;
                 newApps[i] = apps[i + offset];
-                System.err.print(newApps[i] + ", ");
+                // System.err.print(newApps[i] + ", ");
             }
             apps = newApps;
-            System.err.println();
+            // System.err.println('\n');
         }
 
         return apps;
@@ -167,7 +183,8 @@ public class Student_liamdj implements Student {
         // Get each student's choices of schools to which to apply
         int[][] stuPrefs = new int[N][];
         for (int stu = 0; stu < N - 1; ++stu) {
-            stuPrefs[stu] = getSomeApplications(12, S, T, W, aptitudes[stu], schools, synergies[stu]);
+            stuPrefs[stu] = getSomeApplications(OPPONENT_APPLICATIONS, S, T, W, aptitudes[stu], schools,
+                    synergies[stu]);
         }
 
         // Include my given info
@@ -176,22 +193,21 @@ public class Student_liamdj implements Student {
         stuPrefs[N - 1] = myPrefs;
 
         // Build university preference lists filtered by applications
-        List<TreeSet<StudentPair>> uniPrefTrees = new ArrayList<TreeSet<StudentPair>>();
+        List<TreeSet<Agent>> uniPrefTrees = new ArrayList<TreeSet<Agent>>();
         for (int uni = 0; uni < schools.length; ++uni) {
-            uniPrefTrees.add(new TreeSet<StudentPair>());
+            uniPrefTrees.add(new TreeSet<Agent>());
         }
         for (int stu = 0; stu < stuPrefs.length; ++stu) {
             for (int uni : stuPrefs[stu]) {
-                uniPrefTrees.get(uni).add(new StudentPair(stu, aptitudes[stu] + synergies[stu][uni]));
+                uniPrefTrees.get(uni).add(new Agent(stu, aptitudes[stu] + synergies[stu][uni]));
             }
         }
         // Need two sets of university preference
         List<List<Integer>> uniPrefs = new ArrayList<List<Integer>>();
         List<List<Integer>> uniPrefsDup = new ArrayList<List<Integer>>();
-        for (TreeSet<StudentPair> prefTree : uniPrefTrees) {
-            uniPrefs.add(prefTree.stream().map(StudentPair::getIndex).collect(Collectors.toCollection(ArrayList::new)));
-            uniPrefsDup
-                    .add(prefTree.stream().map(StudentPair::getIndex).collect(Collectors.toCollection(ArrayList::new)));
+        for (TreeSet<Agent> prefTree : uniPrefTrees) {
+            uniPrefs.add(prefTree.stream().map(Agent::getIndex).collect(Collectors.toCollection(ArrayList::new)));
+            uniPrefsDup.add(prefTree.stream().map(Agent::getIndex).collect(Collectors.toCollection(ArrayList::new)));
         }
 
         // Find initial matching
