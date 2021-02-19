@@ -1,4 +1,4 @@
-// create by Liam Johansson
+// created by Liam Johansson
 
 import java.util.Arrays;
 import java.util.List;
@@ -45,10 +45,14 @@ public class Student_percentile implements Student {
             // fraction of students I need to beat to have a good chance
             // of getting into this school
             // weighted sum of school's quality rank and EV of max synergy among students
-            double goalPercentile = (S * schools.get(i) / T + W * (N - 1) / N) / (S + W);
+            double goalPercentile;
+            if (T != 0)
+                goalPercentile = (S * schools.get(i) / T + W * (N - 1) / N) / (S + W);
+            else
+                goalPercentile = (N - 1) / N;
 
             double weight = Math.min(1, myPercentile / goalPercentile);
-            applications[i] = new School(i, weight * schools.get(i) + synergies.get(i));
+            applications[i] = new School(i, Math.pow(weight, 0.5) * (weight * schools.get(i) + synergies.get(i)));
         }
         Arrays.sort(applications);
 
