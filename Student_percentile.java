@@ -22,7 +22,7 @@ public class Student_percentile implements Student {
     }
 
     // Computes CDF of sum of 2 independent uniform distributions
-    // drawn on [0, A] and [0, B]
+    // drawn from [0, A] and [0, B]
     private double percentile(double x, double A, double B) {
         double a = Math.min(A, B);
         double b = Math.max(A, B);
@@ -40,10 +40,15 @@ public class Student_percentile implements Student {
         // Finds schools to apply to
         School[] applications = new School[schools.size()];
         for (int i = 0; i < applications.length; i++) {
+            // fraction of students I am a better applicant than for this school
             double myPercentile = percentile(aptitude + synergies.get(i), S, W);
-            double uniPercentile = (schools.get(i) * S / T + W * N / (N + 1)) / (W + S);
-            double weight = Math.min(1, myPercentile / uniPercentile);
-            applications[i] = new School(i, 1 * (weight * schools.get(i) + synergies.get(i)));
+            // fraction of students I need to beat to have a good chance
+            // of getting into this school
+            // weighted sum of school's quality rank and EV of max synergy among students
+            double goalPercentile = (S * schools.get(i) / T + W * (N - 1) / N) / (S + W);
+
+            double weight = Math.min(1, myPercentile / goalPercentile);
+            applications[i] = new School(i, weight * schools.get(i) + synergies.get(i));
         }
         Arrays.sort(applications);
 
