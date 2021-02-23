@@ -1,5 +1,5 @@
-// Student_liamdj.java:
-// Created by Liam Johansson
+// Student_lk2percentile.java:
+// Created by Liam Johansson and Ken Oku
 
 import java.util.Random;
 import java.util.ArrayList;
@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-public class Student_liamdj implements Student {
+public class Student_lk2percentile implements Student {
 
     private static final int TRIALS = 200;
     private static final int OPPONENT_APPS = 10;

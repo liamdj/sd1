@@ -195,7 +195,7 @@ public class Admissions extends Tournament<Student, AdmissionsConfig> {
     public static void main(String[] args) throws java.io.FileNotFoundException {
         assert args.length >= 1 : "Expected filename of strategies as first argument";
         final int numTrials = 30;
-        final AdmissionsConfig config = new AdmissionsConfig(16, 16, 1);
+        final AdmissionsConfig config = new AdmissionsConfig(1000, 500, 50);
         final BufferedReader namesFile = new BufferedReader(new FileReader(args[0]));
         final List<String> strategyNames = namesFile.lines().map(s -> String.format("Student_%s", s))
                 .collect(Collectors.toList());
@@ -212,6 +212,9 @@ public class Admissions extends Tournament<Student, AdmissionsConfig> {
             avgScore += res[i];
         }
         avgScore /= N;
+        System.out.print("S = " + config.getS());
+        System.out.print(", T = " + config.getT());
+        System.out.println(", W = " + config.getW());
         System.out.println("netID,score,fraction of mean");
         String prevName = strategyNames.get(0).substring(8);
         double cumScore = res[0];
