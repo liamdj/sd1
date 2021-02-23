@@ -1,5 +1,5 @@
 // Student_liamdj.java:
-// Created by Liam Johansson
+// Created by Liam Johansson and Ken Oku
 
 import java.util.Random;
 import java.util.ArrayList;
@@ -65,8 +65,8 @@ public class Student_liamdj implements Student {
             return 1 - Math.pow(a + b - x, 2) / (2 * a * b);
     }
 
-    // Base strategy (percentile). Also used to model how opponents are expected to
-    // apply
+    // Base strategy (percentile)
+    // Also used to model how opponents are expected to apply
     private int[] getSomeApplications(int num, double S, double T, double W, double aptitude, double[] schools,
             double[] synergies) {
 
